@@ -17,16 +17,16 @@ namespace Grzalka
         static ePhase CurPhase = 0;
 
         static double MinimalVoltageDiffence = 5.0d;
-        static double MinimalVoltage = 230.0;
+        static double MinimalVoltage = 249.0;
 
         static GpioController ctrl;
         static ModbusClient modbus;
         static bool Started;
 
-        static double pwr = 0.0d;
-        static double VolA = 0.0d;
-        static double VolB = 0.0d;
-        static double VolC = 0.0d;
+        static int pwr = 0;
+        static int VolA;
+        static int VolB;
+        static int VolC;
 
         static DateTime dLogFileDate = DateTime.MinValue;
         static bool LogFileInitialized = false;
@@ -131,33 +131,34 @@ namespace Grzalka
                 {
 
                     int[] reg = modbus.ReadHoldingRegisters(12, 10);
-                    pwr = (double)reg[0] / 100.0d;
-                    VolA = (double)reg[3] / 10.0;
-                    VolB = (double)reg[5] / 10.0;
-                    VolC = (double)reg[7] / 10.0;
+                    pwr = reg[0];
+                    VolA = reg[3];
+                    VolB = reg[5];
+                    VolC = reg[7];
                     //LogData(pwr, VolA, VolB, VolC, CurPhase);
                     // System.Threading.Thread.Sleep(1000);
                     // continue;
-                    if (pwr >= 1.5)
+                    if (pwr >= 155)
                     {
 
 
 
 
-                        double[] Voltages = { VolA, VolB, VolC };
+                        int[] Voltages = { VolA, VolB, VolC };
                         Array.Sort(Voltages);
-                        double MidValue = Voltages[1];
-                        double LowValue = Voltages[0];
+                        int MidValue = Voltages[1];
+                        int LowValue = Voltages[0];
+                        int HighValue = Voltages[2];
 
-                        if (VolA > MinimalVoltage & VolA > LowValue + MinimalVoltageDiffence & VolA > MidValue)
+                        if (VolA == HighValue &&  VolA> MinimalVoltage*10)
                         {
                             TurnHeater1Phase(ePhase.A);
                         }
-                        else if (VolB > MinimalVoltage & VolB > LowValue + MinimalVoltageDiffence & VolB > MidValue)
+                        else if (VolB == HighValue && VolB > MinimalVoltage * 10)
                         {
                             TurnHeater1Phase(ePhase.B);
                         }
-                        else if (VolC > MinimalVoltage & VolC > LowValue + MinimalVoltageDiffence & VolC > MidValue)
+                        else if (VolC == HighValue && VolC > MinimalVoltage * 10)
                         {
                             TurnHeater1Phase(ePhase.C);
                         }
@@ -165,6 +166,23 @@ namespace Grzalka
                         {
                             TurnHeater1Phase(ePhase.off);
                         }
+
+                        /*    if (VolA > MinimalVoltage & VolA > LowValue + MinimalVoltageDiffence )
+                            {
+                                TurnHeater1Phase(ePhase.A);
+                            }
+                            else if (VolB > MinimalVoltage & VolB > LowValue + MinimalVoltageDiffence )
+                            {
+                                TurnHeater1Phase(ePhase.B);
+                            }
+                            else if (VolC > MinimalVoltage & VolC > LowValue + MinimalVoltageDiffence )
+                            {
+                                TurnHeater1Phase(ePhase.C);
+                            }
+                            else
+                            {
+                                TurnHeater1Phase(ePhase.off);
+                            }*/
 
                         //   
                     }
@@ -205,54 +223,60 @@ namespace Grzalka
 
         static void TurnHeater1Phase(ePhase phase = ePhase.off)
         {
-
-            if (!ctrl.IsPinOpen(pinPhases1_2)) { ctrl.OpenPin(pinPhases1_2); ctrl.SetPinMode(pinPhases1_2, PinMode.Output); }
-            if (!ctrl.IsPinOpen(pinPhase3)) { ctrl.OpenPin(pinPhase3); ctrl.SetPinMode(pinPhase3, PinMode.Output); }
-            if (!ctrl.IsPinOpen(pin_CommonPower)) { ctrl.OpenPin(pin_CommonPower); ctrl.SetPinMode(pin_CommonPower, PinMode.Output); }
-
-            int timeLeft = (int)(dLastChange.AddSeconds(30) - DateTime.Now).TotalSeconds;
-            string timeLeftText = timeLeft + "s";
-            if (timeLeft <= 0) timeLeftText = "teraz";
-
-            if (phase == ePhase.ForceOFF)
+            try
             {
-                //  Console.Beep();
-                Console.WriteLine("[" + DateTime.Now.ToString() + "][FORCE OFF] PWR: " + pwr.ToString() + "kw, A: " + VolA.ToString() + "V, B: " + VolB.ToString() + "V, C: " + VolC.ToString() + "V.");
+                if (!ctrl.IsPinOpen(pinPhases1_2)) { ctrl.OpenPin(pinPhases1_2); ctrl.SetPinMode(pinPhases1_2, PinMode.Output); }
+                if (!ctrl.IsPinOpen(pinPhase3)) { ctrl.OpenPin(pinPhase3); ctrl.SetPinMode(pinPhase3, PinMode.Output); }
+                if (!ctrl.IsPinOpen(pin_CommonPower)) { ctrl.OpenPin(pin_CommonPower); ctrl.SetPinMode(pin_CommonPower, PinMode.Output); }
+
+                int timeLeft = (int)(dLastChange.AddSeconds(30) - DateTime.Now).TotalSeconds;
+                string timeLeftText = timeLeft + "s";
+                if (timeLeft <= 0) timeLeftText = "teraz";
+
+                if (phase == ePhase.ForceOFF)
+                {
+                    //  Console.Beep();
+                    Console.WriteLine("[" + DateTime.Now.ToString() + "][FORCE OFF] PWR: " + ((Single)pwr/100.0).ToString() + "kw, A: " + ((Single)VolA / 10.0).ToString() + "V, B: " + ((Single)VolB / 10.0).ToString() + "V, C: " + ((Single)VolC / 10.0).ToString() + "V."); 
+                }
+                else
+                { Console.WriteLine("[" + DateTime.Now.ToString() + "]  PWR: " + ((Single)pwr / 100.0).ToString() + "kw, A: " + ((Single)VolA / 10.0).ToString() + "V, B: " + ((Single)VolB / 10.0).ToString() + "V, C: " + ((Single)VolC / 10.0).ToString() + "V. Grzałka faza: " + CurPhase + ", możliwe przelączenie: " + timeLeftText); }
+
+                if (phase != ePhase.ForceOFF)
+                {
+                    if (phase == CurPhase || dLastChange.AddSeconds(30) > DateTime.Now) return;
+                }
+
+                CurPhase = phase;
+                dLastChange = DateTime.Now;
+                switch (phase)
+                {
+
+                    case ePhase.A:
+                        ctrl.Write(pinPhases1_2, PinValue.High);
+                        ctrl.Write(pinPhase3, PinValue.High);
+                        ctrl.Write(pin_CommonPower, PinValue.Low);
+                        break;
+                    case ePhase.B:
+                        ctrl.Write(pinPhases1_2, PinValue.Low);
+                        ctrl.Write(pinPhase3, PinValue.High);
+                        ctrl.Write(pin_CommonPower, PinValue.Low);
+                        break;
+                    case ePhase.C:
+                        ctrl.Write(pinPhases1_2, PinValue.High);
+                        ctrl.Write(pinPhase3, PinValue.Low);
+                        ctrl.Write(pin_CommonPower, PinValue.Low);
+                        break;
+                    default:
+                        ctrl.Write(pin_CommonPower, PinValue.High);
+                        ctrl.Write(pinPhases1_2, PinValue.High);
+                        ctrl.Write(pinPhase3, PinValue.High);
+                        break;
+
+                }
             }
-            else
-            { Console.WriteLine("[" + DateTime.Now.ToString() + "] PWR: " + pwr.ToString() + "kw, A: " + VolA.ToString() + "V, B: " + VolB.ToString() + "V, C: " + VolC.ToString() + "V. Grzałka faza: " + CurPhase + ", możliwe przelączenie: " + timeLeftText); }
-
-            if (phase != ePhase.ForceOFF)
+            catch (Exception ex)
             {
-                if (phase == CurPhase || dLastChange.AddSeconds(30) > DateTime.Now) return;
-            }
-
-            CurPhase = phase;
-            dLastChange = DateTime.Now;
-            switch (phase)
-            {
-
-                case ePhase.A:
-                    ctrl.Write(pinPhases1_2, PinValue.High);
-                    ctrl.Write(pinPhase3, PinValue.High);
-                    ctrl.Write(pin_CommonPower, PinValue.Low);
-                    break;
-                case ePhase.B:
-                    ctrl.Write(pinPhases1_2, PinValue.Low);
-                    ctrl.Write(pinPhase3, PinValue.High);
-                    ctrl.Write(pin_CommonPower, PinValue.Low);
-                    break;
-                case ePhase.C:
-                    ctrl.Write(pinPhases1_2, PinValue.High);
-                    ctrl.Write(pinPhase3, PinValue.Low);
-                    ctrl.Write(pin_CommonPower, PinValue.Low);
-                    break;
-                default:
-                    ctrl.Write(pin_CommonPower, PinValue.High);
-                    ctrl.Write(pinPhases1_2, PinValue.High);
-                    ctrl.Write(pinPhase3, PinValue.High);
-                    break;
-
+                Console.WriteLine(ex.ToString());
             }
         }
 
