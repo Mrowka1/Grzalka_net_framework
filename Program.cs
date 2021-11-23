@@ -32,6 +32,7 @@ namespace Grzalka
         static bool LogFileInitialized = false;
         static int interval = 1000;
         static string[] StartupArgs = { };
+        static string rootPath = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
         static DateTime dLastChange = DateTime.Now;
 
@@ -60,7 +61,7 @@ namespace Grzalka
             }
             Console.WriteLine("Dostępne porty szeregowe:" + Environment.NewLine + ports);
 
-            string configPath = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "/config.txt";
+            string configPath = rootPath + "/config.txt";
 
             Console.WriteLine("Plik konfiguracyjny: " + configPath);
             if (!System.IO.File.Exists(configPath))
@@ -77,7 +78,7 @@ namespace Grzalka
             }
             StartupArgs = args;
             ctrl = new GpioController(PinNumberingScheme.Logical);
-
+            Console.WriteLine("Aktualny plik z danymi: " + DataLogFileName());
             Setup();
         }
 
@@ -88,36 +89,40 @@ namespace Grzalka
             {
                 TurnHeater1Phase(ePhase.ForceOFF);
 
-                if (modbus != null)
+                if (modbus == null)
                 {
-                    if (modbus.Connected) modbus.Disconnect();
-                    modbus = null;
-                }
-                if (serialPort.Split(':').Length > 1)
-                {
-                    string ip = serialPort.Split(':')[0];
-                    int port = int.Parse(serialPort.Split(':')[1]);
-                    Console.WriteLine("Modbus TCP " + ip + ":" + port);
-                    modbus = new ModbusClient(ip, port);
+                    modbus = new ModbusClient(serialPort);
+                    modbus.ReceiveDataChanged += Modbus_ReceiveDataChanged;
+                    modbus.ConnectedChanged += Modbus_ConnectedChanged;
+                    modbus.DataReceivingEnd += Modbus_DataReceivingEnd;
+                    modbus.Parity = System.IO.Ports.Parity.None;
+                    modbus.StopBits = System.IO.Ports.StopBits.One;
+                    modbus.UnitIdentifier = 1;
+                    modbus.ConnectionTimeout = 1000;
                 }
                 else
                 {
-                    modbus = new ModbusClient(serialPort);
+                    modbus.Disconnect();
                 }
-                modbus.ConnectedChanged += Modbus_ConnectedChanged;
-                modbus.Parity = System.IO.Ports.Parity.None;
-                modbus.StopBits = System.IO.Ports.StopBits.One;
-                modbus.UnitIdentifier = 1;
-                modbus.ConnectionTimeout = 1000;
                 modbus.Connect();
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                Console.WriteLine(ex.Message);
                 TurnHeater1Phase(ePhase.ForceOFF);
                 System.Threading.Thread.Sleep(interval * 5);
                 Setup();
             }
+        }
+
+        private static void Modbus_DataReceivingEnd(object sender)
+        {
+            Console.WriteLine("Zakończono odbieranie danych");
+        }
+
+        private static void Modbus_ReceiveDataChanged(object sender)
+        {
+
         }
 
         static void Run()
@@ -135,7 +140,7 @@ namespace Grzalka
                     VolA = reg[3];
                     VolB = reg[5];
                     VolC = reg[7];
-                    //LogData(pwr, VolA, VolB, VolC, CurPhase);
+                    LogData(pwr, VolA, VolB, VolC, CurPhase);
                     // System.Threading.Thread.Sleep(1000);
                     // continue;
                     if (pwr >= 155)
@@ -150,7 +155,7 @@ namespace Grzalka
                         int LowValue = Voltages[0];
                         int HighValue = Voltages[2];
 
-                        if (VolA == HighValue &&  VolA> MinimalVoltage*10)
+                        if (VolA == HighValue && VolA > MinimalVoltage * 10)
                         {
                             TurnHeater1Phase(ePhase.A);
                         }
@@ -167,24 +172,7 @@ namespace Grzalka
                             TurnHeater1Phase(ePhase.off);
                         }
 
-                        /*    if (VolA > MinimalVoltage & VolA > LowValue + MinimalVoltageDiffence )
-                            {
-                                TurnHeater1Phase(ePhase.A);
-                            }
-                            else if (VolB > MinimalVoltage & VolB > LowValue + MinimalVoltageDiffence )
-                            {
-                                TurnHeater1Phase(ePhase.B);
-                            }
-                            else if (VolC > MinimalVoltage & VolC > LowValue + MinimalVoltageDiffence )
-                            {
-                                TurnHeater1Phase(ePhase.C);
-                            }
-                            else
-                            {
-                                TurnHeater1Phase(ePhase.off);
-                            }*/
 
-                        //   
                     }
                     else
                     {
@@ -195,9 +183,17 @@ namespace Grzalka
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                Console.WriteLine(ex.Message);
                 TurnHeater1Phase(ePhase.ForceOFF);
-                System.Threading.Thread.Sleep(interval * 5);
+
+                if (DateTime.Now.Hour >= 16 | DateTime.Now.Hour <= 7)
+                {
+                    System.Threading.Thread.Sleep(TimeSpan.FromMinutes(15));
+                }
+                else
+                {
+                    System.Threading.Thread.Sleep(interval * 5);
+                }
                 Setup();
             }
         }
@@ -236,7 +232,7 @@ namespace Grzalka
                 if (phase == ePhase.ForceOFF)
                 {
                     //  Console.Beep();
-                    Console.WriteLine("[" + DateTime.Now.ToString() + "][FORCE OFF] PWR: " + ((Single)pwr/100.0).ToString() + "kw, A: " + ((Single)VolA / 10.0).ToString() + "V, B: " + ((Single)VolB / 10.0).ToString() + "V, C: " + ((Single)VolC / 10.0).ToString() + "V."); 
+                    Console.WriteLine("[" + DateTime.Now.ToString() + "][FORCE OFF] PWR: " + ((Single)pwr / 100.0).ToString() + "kw, A: " + ((Single)VolA / 10.0).ToString() + "V, B: " + ((Single)VolB / 10.0).ToString() + "V, C: " + ((Single)VolC / 10.0).ToString() + "V.");
                 }
                 else
                 { Console.WriteLine("[" + DateTime.Now.ToString() + "]  PWR: " + ((Single)pwr / 100.0).ToString() + "kw, A: " + ((Single)VolA / 10.0).ToString() + "V, B: " + ((Single)VolB / 10.0).ToString() + "V, C: " + ((Single)VolC / 10.0).ToString() + "V. Grzałka faza: " + CurPhase + ", możliwe przelączenie: " + timeLeftText); }
@@ -276,18 +272,25 @@ namespace Grzalka
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                Console.WriteLine(ex.Message);
             }
         }
-
+        static string DataLogFileName()
+        {
+            if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
+           return rootPath + "/"+ dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
+         
+        }
         static void LogData(double pwr, double vola, double volb, double volc, ePhase phase)
         {
             string divider = ";";
-            if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
-            string FileName = dLogFileDate.ToShortDateString().Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
+            /*    if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
+                string FileName = dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";*/
+            string FileName = DataLogFileName();
             if (System.IO.File.Exists(FileName)) LogFileInitialized = true;
             if (!LogFileInitialized)
             {
+                Console.WriteLine("Log filename: " + FileName);
                 Log(FileName, "Data" + divider + "Moc" + divider + "Napięcie A" + divider + "Napięcie B" + divider + "Napiecie C" + divider + "Grzałka na fazie");
             }
             Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + phase.ToString());
