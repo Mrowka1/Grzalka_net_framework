@@ -276,7 +276,7 @@ namespace Grzalka
             }
         }
         static string DataLogFileName()
-        {
+        {           
             if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
            return rootPath + "/"+ dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
          
