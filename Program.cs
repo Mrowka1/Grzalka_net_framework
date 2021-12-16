@@ -8,25 +8,108 @@ namespace Grzalka
     class Program
     {
 
-        static int[] PhasesPins = { 26, 25, 24 };
+        //static int[] PhasesPins = { 26, 19, 13 };
+        PowerState power;
+        public PowerState Power
+        {
+            get => power;
+            set
+            {
+                power = value;
+                foreach (Phase p in Phase.Phases)
+                {
 
-        static int pinPhases1_2 = 26;
-        static int pinPhase3 = 19;
-        static int pin_CommonPower = 13;
+                }
+            }
+        }
+        public enum PowerState
+        {
+            Low = 0,
+            Ok = 1,
+            ForceOff = 2
+        }
 
-        static ePhase CurPhase = 0;
+        class Phase
+        {
+            static List<Phase> phases = new List<Phase>();
+            public static Phase[] Phases => phases.ToArray();
+            public enum PhasesSymbols
+            {
+                A = 0,
+                B = 1,
+                C = 3
+            }
+            public readonly PhasesSymbols Symbol;
+            public enum PhaseState
+            {
+                Off = 0,
+                On = 1
+            }
+            PhaseState state;
+            public PhaseState State
+            {
+                get => state;
+                set
+                {
+                    state = value;
+                    UpdateRelay();
+                }
+            }
 
-        static double MinimalVoltageDiffence = 5.0d;
-        static double MinimalVoltage = 249.0;
+            double voltage;
+            public double Voltage
+            {
+                get => voltage;
+                set
+                {
+                    voltage = value;
+
+                }
+            }
+            public readonly int GPIO;
+
+            public void Clear()
+            {
+                phases.Clear();
+            }
+
+            public Phase(PhasesSymbols _symbol, int _gpioPin)
+            {
+                state = PhaseState.Off;
+                Symbol = _symbol;
+                GPIO = _gpioPin;
+                phases.Add(this);
+
+                if (!ctrl.IsPinOpen(GPIO)) { 
+                    ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output);
+                    ctrl.Write(GPIO, PinValue.High);
+                }
+            }
+
+
+            void UpdateRelay()
+            {
+                if (!ctrl.IsPinOpen(GPIO)) { ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output); }
+
+                if (state != PhaseState.On)
+                    ctrl.Write(GPIO, PinValue.High);
+                else
+                    ctrl.Write(GPIO, PinValue.Low);
+            }
+        }
+
+        /* static int pinPhases1_2 = 26;
+         static int pinPhase3 = 19;
+         static int pin_CommonPower = 13;*/
+
+
+
+        static readonly double MinimalVoltage = 250.0;
 
         static GpioController ctrl;
         static ModbusClient modbus;
         static bool Started;
 
-        static int pwr = 0;
-        static int VolA;
-        static int VolB;
-        static int VolC;
 
         static DateTime dLogFileDate = DateTime.MinValue;
         static bool LogFileInitialized = false;
@@ -36,14 +119,6 @@ namespace Grzalka
 
         static DateTime dLastChange = DateTime.Now;
 
-        enum ePhase
-        {
-            off = 0,
-            A = 1,
-            B = 2,
-            C = 3,
-            ForceOFF = 4
-        }
 
         static string serialPort;
         static void Main(string[] args)
@@ -66,15 +141,14 @@ namespace Grzalka
             Console.WriteLine("Plik konfiguracyjny: " + configPath);
             if (!System.IO.File.Exists(configPath))
             {
+                Console.WriteLine("Brak pliku konfiguracyjnego.");
+                Console.ReadLine();
                 Environment.Exit(0);
             }
             else
             {
                 string[] lines = System.IO.File.ReadAllLines(configPath);
                 serialPort = lines[0];
-                if (lines.Length >= 2) pinPhases1_2 = int.Parse(lines[1]);
-                if (lines.Length >= 3) pinPhase3 = int.Parse(lines[2]);
-                if (lines.Length >= 4) pin_CommonPower = int.Parse(lines[3]);
             }
             StartupArgs = args;
             ctrl = new GpioController(PinNumberingScheme.Logical);
@@ -87,8 +161,6 @@ namespace Grzalka
             Started = false;
             try
             {
-                TurnHeater1Phase(ePhase.ForceOFF);
-
                 if (modbus == null)
                 {
                     modbus = new ModbusClient(serialPort);
@@ -109,7 +181,7 @@ namespace Grzalka
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-                TurnHeater1Phase(ePhase.ForceOFF);
+
                 System.Threading.Thread.Sleep(interval * 5);
                 Setup();
             }
@@ -136,55 +208,22 @@ namespace Grzalka
                 {
 
                     int[] reg = modbus.ReadHoldingRegisters(12, 10);
-                    pwr = reg[0];
-                    VolA = reg[3];
-                    VolB = reg[5];
-                    VolC = reg[7];
-                    LogData(pwr, VolA, VolB, VolC, CurPhase);
+                    int pwr = reg[0];
+                    int VolA = reg[3];
+                    int VolB = reg[5];
+                    int VolC = reg[7];
+                    LogData(pwr, VolA, VolB, VolC);
                     // System.Threading.Thread.Sleep(1000);
                     // continue;
                     if (pwr >= 155)
-                    {
 
-
-
-
-                        int[] Voltages = { VolA, VolB, VolC };
-                        Array.Sort(Voltages);
-                        int MidValue = Voltages[1];
-                        int LowValue = Voltages[0];
-                        int HighValue = Voltages[2];
-
-                        if (VolA == HighValue && VolA > MinimalVoltage * 10)
-                        {
-                            TurnHeater1Phase(ePhase.A);
-                        }
-                        else if (VolB == HighValue && VolB > MinimalVoltage * 10)
-                        {
-                            TurnHeater1Phase(ePhase.B);
-                        }
-                        else if (VolC == HighValue && VolC > MinimalVoltage * 10)
-                        {
-                            TurnHeater1Phase(ePhase.C);
-                        }
-                        else
-                        {
-                            TurnHeater1Phase(ePhase.off);
-                        }
-
-
-                    }
-                    else
-                    {
-                        TurnHeater1Phase(ePhase.off);
-                    }
-                    System.Threading.Thread.Sleep(interval);
+                        System.Threading.Thread.Sleep(interval);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-                TurnHeater1Phase(ePhase.ForceOFF);
+
 
                 if (DateTime.Now.Hour >= 16 | DateTime.Now.Hour <= 7)
                 {
@@ -199,89 +238,15 @@ namespace Grzalka
         }
 
 
-        static void TurnHeater3Phases(bool On, byte phase = 0)
-        {
-            /*     foreach (int pin in PhasesPins)
-                 {
-                     if (!ctrl.IsPinOpen(pin))
-                     {
-                         ctrl.OpenPin(pin, PinMode.Output);
-                         ctrl.Write(pin, PinValue.High);
-                     }
-                 }
-                 if (On && phase != 0)
-                 {
-                     ctrl.Write(PhasesPins[phase - 1], PinValue.Low);
-                 }
-            */
-        }
 
 
-        static void TurnHeater1Phase(ePhase phase = ePhase.off)
-        {
-            try
-            {
-                if (!ctrl.IsPinOpen(pinPhases1_2)) { ctrl.OpenPin(pinPhases1_2); ctrl.SetPinMode(pinPhases1_2, PinMode.Output); }
-                if (!ctrl.IsPinOpen(pinPhase3)) { ctrl.OpenPin(pinPhase3); ctrl.SetPinMode(pinPhase3, PinMode.Output); }
-                if (!ctrl.IsPinOpen(pin_CommonPower)) { ctrl.OpenPin(pin_CommonPower); ctrl.SetPinMode(pin_CommonPower, PinMode.Output); }
-
-                int timeLeft = (int)(dLastChange.AddSeconds(30) - DateTime.Now).TotalSeconds;
-                string timeLeftText = timeLeft + "s";
-                if (timeLeft <= 0) timeLeftText = "teraz";
-
-                if (phase == ePhase.ForceOFF)
-                {
-                    //  Console.Beep();
-                    Console.WriteLine("[" + DateTime.Now.ToString() + "][FORCE OFF] PWR: " + ((Single)pwr / 100.0).ToString() + "kw, A: " + ((Single)VolA / 10.0).ToString() + "V, B: " + ((Single)VolB / 10.0).ToString() + "V, C: " + ((Single)VolC / 10.0).ToString() + "V.");
-                }
-                else
-                { Console.WriteLine("[" + DateTime.Now.ToString() + "]  PWR: " + ((Single)pwr / 100.0).ToString() + "kw, A: " + ((Single)VolA / 10.0).ToString() + "V, B: " + ((Single)VolB / 10.0).ToString() + "V, C: " + ((Single)VolC / 10.0).ToString() + "V. Grzałka faza: " + CurPhase + ", możliwe przelączenie: " + timeLeftText); }
-
-                if (phase != ePhase.ForceOFF)
-                {
-                    if (phase == CurPhase || dLastChange.AddSeconds(30) > DateTime.Now) return;
-                }
-
-                CurPhase = phase;
-                dLastChange = DateTime.Now;
-                switch (phase)
-                {
-
-                    case ePhase.A:
-                        ctrl.Write(pinPhases1_2, PinValue.High);
-                        ctrl.Write(pinPhase3, PinValue.High);
-                        ctrl.Write(pin_CommonPower, PinValue.Low);
-                        break;
-                    case ePhase.B:
-                        ctrl.Write(pinPhases1_2, PinValue.Low);
-                        ctrl.Write(pinPhase3, PinValue.High);
-                        ctrl.Write(pin_CommonPower, PinValue.Low);
-                        break;
-                    case ePhase.C:
-                        ctrl.Write(pinPhases1_2, PinValue.High);
-                        ctrl.Write(pinPhase3, PinValue.Low);
-                        ctrl.Write(pin_CommonPower, PinValue.Low);
-                        break;
-                    default:
-                        ctrl.Write(pin_CommonPower, PinValue.High);
-                        ctrl.Write(pinPhases1_2, PinValue.High);
-                        ctrl.Write(pinPhase3, PinValue.High);
-                        break;
-
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
         static string DataLogFileName()
-        {           
+        {
             if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
-           return rootPath + "/"+ dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
-         
+            return rootPath + "/" + dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
+
         }
-        static void LogData(double pwr, double vola, double volb, double volc, ePhase phase)
+        static void LogData(double pwr, double vola, double volb, double volc)
         {
             string divider = ";";
             /*    if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
@@ -293,7 +258,11 @@ namespace Grzalka
                 Console.WriteLine("Log filename: " + FileName);
                 Log(FileName, "Data" + divider + "Moc" + divider + "Napięcie A" + divider + "Napięcie B" + divider + "Napiecie C" + divider + "Grzałka na fazie");
             }
-            Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + phase.ToString());
+            string EnabledPhases = "";
+
+            foreach (Phase p in Phase.Phases) if (p.State == Phase.PhaseState.On) EnabledPhases += p.Symbol.ToString() + " ";
+
+            Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + EnabledPhases);
         }
         private static void Modbus_ConnectedChanged(object sender)
         {
