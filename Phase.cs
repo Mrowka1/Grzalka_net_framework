@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Grzalka;
+using System;
 using System.Collections.Generic;
 using System.Device.Gpio;
 using System.Linq;
@@ -46,7 +47,14 @@ namespace Grzalka_net_framework
             }
         }
         public readonly int GPIO;
-
+        static public Phase GetPhase(PhasesSymbols symbol)
+        {
+            foreach (Phase phase in phases)
+            {
+                if (phase.Symbol == symbol) return phase;
+            }
+            return null;
+        }
         public void Clear()
         {
             phases.Clear();
@@ -65,6 +73,20 @@ namespace Grzalka_net_framework
                 ctrl.Write(GPIO, PinValue.High);
             }
         }
+
+        public static void RefreshPhases()
+        {
+            foreach (Phase phase in phases)
+            {
+                phase.Refresh();
+            }
+        }
+        
+        void Refresh()
+        {
+
+        }
+
 
 
         void UpdateRelay()

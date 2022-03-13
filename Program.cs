@@ -7,22 +7,33 @@ using Grzalka_net_framework;
 
 namespace Grzalka
 {
-
-    public class Program
+    public static class PowerInfo
     {
-     
-        //static int[] PhasesPins = { 26, 19, 13 };
-        PowerState power;
-        public PowerState Power
+        static readonly double MinimalVoltage = 250.0;
+        static readonly double MinimalPower = 1.5;
+
+        static double powerVal;
+        static public double PowerValue
+        {
+            get { return powerVal; }
+            set
+            {
+                powerVal = value;
+                if (power != PowerState.ForceOff)
+                {
+                    if (powerVal >= MinimalPower) { power = PowerState.Ok; } else power = PowerState.Low;
+                }
+            }
+        }
+
+        static PowerState power;
+        static public PowerState Power
         {
             get => power;
             set
             {
                 power = value;
-                foreach (Phase p in Phase.Phases)
-                {
-
-                }
+                Phase.RefreshPhases();
             }
         }
         public enum PowerState
@@ -31,85 +42,91 @@ namespace Grzalka
             Ok = 1,
             ForceOff = 2
         }
+    }
+    public class Program
+    {
 
-    /*    class Phase
-        {
-            static List<Phase> phases = new List<Phase>();
-            public static Phase[] Phases => phases.ToArray();
-            public enum PhasesSymbols
+        //static int[] PhasesPins = { 26, 19, 13 };
+
+
+        /*    class Phase
             {
-                A = 0,
-                B = 1,
-                C = 3
-            }
-            public readonly PhasesSymbols Symbol;
-            public enum PhaseState
-            {
-                Off = 0,
-                On = 1
-            }
-            PhaseState state;
-            public PhaseState State
-            {
-                get => state;
-                set
+                static List<Phase> phases = new List<Phase>();
+                public static Phase[] Phases => phases.ToArray();
+                public enum PhasesSymbols
                 {
-                    state = value;
-                    UpdateRelay();
+                    A = 0,
+                    B = 1,
+                    C = 3
                 }
-            }
-
-            double voltage;
-            public double Voltage
-            {
-                get => voltage;
-                set
+                public readonly PhasesSymbols Symbol;
+                public enum PhaseState
                 {
-                    voltage = value;
+                    Off = 0,
+                    On = 1
+                }
+                PhaseState state;
+                public PhaseState State
+                {
+                    get => state;
+                    set
+                    {
+                        state = value;
+                        UpdateRelay();
+                    }
+                }
 
+                double voltage;
+                public double Voltage
+                {
+                    get => voltage;
+                    set
+                    {
+                        voltage = value;
+
+                    }
+                }
+                public readonly int GPIO;
+
+                public void Clear()
+                {
+                    phases.Clear();
+                }
+
+                public Phase(PhasesSymbols _symbol, int _gpioPin)
+                {
+                    state = PhaseState.Off;
+                    Symbol = _symbol;
+                    GPIO = _gpioPin;
+                    phases.Add(this);
+
+                    if (!ctrl.IsPinOpen(GPIO)) { 
+                        ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output);
+                        ctrl.Write(GPIO, PinValue.High);
+                    }
+                }
+
+
+                void UpdateRelay()
+                {
+                    if (!ctrl.IsPinOpen(GPIO)) { ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output); }
+
+                    if (state != PhaseState.On)
+                        ctrl.Write(GPIO, PinValue.High);
+                    else
+                        ctrl.Write(GPIO, PinValue.Low);
                 }
             }
-            public readonly int GPIO;
-
-            public void Clear()
-            {
-                phases.Clear();
-            }
-
-            public Phase(PhasesSymbols _symbol, int _gpioPin)
-            {
-                state = PhaseState.Off;
-                Symbol = _symbol;
-                GPIO = _gpioPin;
-                phases.Add(this);
-
-                if (!ctrl.IsPinOpen(GPIO)) { 
-                    ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output);
-                    ctrl.Write(GPIO, PinValue.High);
-                }
-            }
-
-
-            void UpdateRelay()
-            {
-                if (!ctrl.IsPinOpen(GPIO)) { ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output); }
-
-                if (state != PhaseState.On)
-                    ctrl.Write(GPIO, PinValue.High);
-                else
-                    ctrl.Write(GPIO, PinValue.Low);
-            }
-        }
-    */
+        */
         /* static int pinPhases1_2 = 26;
          static int pinPhase3 = 19;
          static int pin_CommonPower = 13;*/
 
 
 
-        static readonly double MinimalVoltage = 250.0;
 
-      //  static GpioController ctrl;
+
+        //  static GpioController ctrl;
         static ModbusClient modbus;
         static bool Started;
 
@@ -126,7 +143,7 @@ namespace Grzalka
         static string serialPort;
         static void Main(string[] args)
         {
-       
+
             /*  if (args.Length < 2)
               {
                   
@@ -216,12 +233,20 @@ namespace Grzalka
                     int VolA = reg[3];
                     int VolB = reg[5];
                     int VolC = reg[7];
+
+
+                    PowerInfo.PowerValue = pwr;
+
+                    Phase.GetPhase(Phase.PhasesSymbols.A).Voltage = VolA;
+                    Phase.GetPhase(Phase.PhasesSymbols.B).Voltage = VolB;
+                    Phase.GetPhase(Phase.PhasesSymbols.C).Voltage = VolC;
+
                     LogData(pwr, VolA, VolB, VolC);
                     // System.Threading.Thread.Sleep(1000);
                     // continue;
-                    if (pwr >= 155)
+                    //if (pwr >= 155)
 
-                        System.Threading.Thread.Sleep(interval);
+                    System.Threading.Thread.Sleep(interval);
                 }
             }
             catch (Exception ex)
@@ -265,6 +290,8 @@ namespace Grzalka
             string EnabledPhases = "";
 
             foreach (Phase p in Phase.Phases) if (p.State == Phase.PhaseState.On) EnabledPhases += p.Symbol.ToString() + " ";
+
+            Console.WriteLine(DateTime.Now.ToString() + " Moc: " + (pwr / 10.0).ToString().Replace(".", ",") + " A: " + vola.ToString().Replace(".", ",") + " B: " + volb.ToString().Replace(".", ",") + " C: " + volc.ToString().Replace(".", ",") + " Włączone fazy: " + EnabledPhases);
 
             Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + EnabledPhases);
         }
