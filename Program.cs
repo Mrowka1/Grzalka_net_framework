@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Device.Gpio;
 using EasyModbus;
+using Grzalka_net_framework;
+
 namespace Grzalka
 {
-    class Program
-    {
 
+    public class Program
+    {
+     
         //static int[] PhasesPins = { 26, 19, 13 };
         PowerState power;
         public PowerState Power
@@ -29,7 +32,7 @@ namespace Grzalka
             ForceOff = 2
         }
 
-        class Phase
+    /*    class Phase
         {
             static List<Phase> phases = new List<Phase>();
             public static Phase[] Phases => phases.ToArray();
@@ -97,7 +100,7 @@ namespace Grzalka
                     ctrl.Write(GPIO, PinValue.Low);
             }
         }
-
+    */
         /* static int pinPhases1_2 = 26;
          static int pinPhase3 = 19;
          static int pin_CommonPower = 13;*/
@@ -106,7 +109,7 @@ namespace Grzalka
 
         static readonly double MinimalVoltage = 250.0;
 
-        static GpioController ctrl;
+      //  static GpioController ctrl;
         static ModbusClient modbus;
         static bool Started;
 
@@ -123,6 +126,7 @@ namespace Grzalka
         static string serialPort;
         static void Main(string[] args)
         {
+       
             /*  if (args.Length < 2)
               {
                   
@@ -151,7 +155,7 @@ namespace Grzalka
                 serialPort = lines[0];
             }
             StartupArgs = args;
-            ctrl = new GpioController(PinNumberingScheme.Logical);
+            Phase.ctrl = new GpioController(PinNumberingScheme.Logical);
             Console.WriteLine("Aktualny plik z danymi: " + DataLogFileName());
             Setup();
         }
