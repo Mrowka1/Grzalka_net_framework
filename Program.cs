@@ -11,7 +11,7 @@ namespace Grzalka
     {
         public static double MinimalVoltage = 250.0;
         public static double MinimalPower = 1.5;
-
+        public static DateTime LastTurnOffTime = DateTime.MinValue;
         static double powerVal;
         static public double PowerValue
         {
@@ -144,6 +144,7 @@ namespace Grzalka
         static string serialPort;
         static void Main(string[] args)
         {
+            AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
             try
             {
 
@@ -160,7 +161,7 @@ namespace Grzalka
                 }
                 Console.WriteLine("Dostępne porty szeregowe:" + Environment.NewLine + ports);
 
-                string configPath = System.IO.Path.GetDirectoryName( rootPath) + "/config.txt";
+                string configPath = System.IO.Path.GetDirectoryName(rootPath) + "/config.txt";
 
                 Console.WriteLine("Plik konfiguracyjny: " + configPath);
                 if (!System.IO.File.Exists(configPath))
@@ -190,6 +191,18 @@ namespace Grzalka
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
+            }
+        }
+
+        private static void CurrentDomain_ProcessExit(object sender, EventArgs e)
+        {
+            try
+            {
+                PowerInfo.Power = PowerInfo.PowerState.ForceOff;
+            }
+            catch
+            {
+
             }
         }
 
@@ -245,6 +258,12 @@ namespace Grzalka
             if (Started) return;
 
             Started = true;
+
+
+            double pwr = -1;
+            double VolA = -1;
+            double VolB = -1;
+            double VolC = -1;
             try
             {
 
@@ -252,10 +271,10 @@ namespace Grzalka
                 {
 
                     int[] reg = modbus.ReadHoldingRegisters(12, 10);
-                    double pwr = reg[0] / 100.0;
-                    double VolA = reg[3] / 10.0;
-                    double VolB = reg[5] / 10.0;
-                    double VolC = reg[7] / 10.0;
+                    pwr = reg[0] / 100.0;
+                    VolA = reg[3] / 10.0;
+                    VolB = reg[5] / 10.0;
+                    VolC = reg[7] / 10.0;
 
 
                     PowerInfo.PowerValue = pwr;
@@ -264,18 +283,30 @@ namespace Grzalka
                     Phase.GetPhase(Phase.PhasesSymbols.B).Voltage = VolB;
                     Phase.GetPhase(Phase.PhasesSymbols.C).Voltage = VolC;
 
-                    LogData(pwr, VolA, VolB, VolC);
+
                     // System.Threading.Thread.Sleep(1000);
                     // continue;
                     //if (pwr >= 155)
-
+                    LogData(pwr, VolA, VolB, VolC);
                     System.Threading.Thread.Sleep(interval);
                 }
+
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
-
+                if (ex.GetType() == typeof(System.TimeoutException))
+                {
+                    Console.WriteLine("------------------------------[STOP]---------------------------------");
+                    Console.WriteLine("Brak połączenia z falownikiem.");
+                    Console.WriteLine("---------------------------------------------------------------------");
+                }
+                else
+                {
+                    Console.WriteLine("------------------------------[STOP]---------------------------------");
+                    Console.WriteLine("Error: ");
+                    Console.WriteLine(ex.GetType().ToString());
+                    Console.WriteLine("---------------------------------------------------------------------");
+                }
                 PowerInfo.Power = PowerInfo.PowerState.ForceOff;
                 if (DateTime.Now.Hour >= 16 | DateTime.Now.Hour <= 7)
                 {
@@ -285,7 +316,9 @@ namespace Grzalka
                 {
                     System.Threading.Thread.Sleep(interval * 5);
                 }
+                LogData(pwr, VolA, VolB, VolC);
                 Setup();
+
             }
         }
 
@@ -299,26 +332,35 @@ namespace Grzalka
         }
         static void LogData(double pwr, double vola, double volb, double volc)
         {
-            string divider = ";";
-            /*    if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
-                string FileName = dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";*/
-            string FileName = DataLogFileName();
-            if (System.IO.File.Exists(FileName)) LogFileInitialized = true;
-            if (!LogFileInitialized)
+            try
             {
-                Console.WriteLine("Log filename: " + FileName);
-                Log(FileName, "Data" + divider + "Moc" + divider + "Napięcie A" + divider + "Napięcie B" + divider + "Napiecie C" + divider + "Grzałka na fazie");
+                string divider = ";";
+                /*    if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
+                    string FileName = dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";*/
+                string FileName = DataLogFileName();
+                if (System.IO.File.Exists(FileName)) LogFileInitialized = true;
+                if (!LogFileInitialized)
+                {
+                    Console.WriteLine("Log filename: " + FileName);
+                    Log(FileName, "Data" + divider + "Moc" + divider + "Napięcie A" + divider + "Napięcie B" + divider + "Napiecie C" + divider + "Grzałka na fazie");
+                }
+
+                string EnabledPhases = "; PowerState: " + PowerInfo.Power.ToString() + "; Włączone fazy: ";
+
+                foreach (Phase p in Phase.Phases) if (p.State == Phase.PhaseState.On) EnabledPhases += p.Symbol.ToString() + " ";
+
+                int phATime = Phase.iMinSwitchTime - (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.A).LastRelaySwitchTime).TotalSeconds;
+                if (phATime < 0) phATime = 0;
+                int phBTime = Phase.iMinSwitchTime - (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.B).LastRelaySwitchTime).TotalSeconds;
+                if (phBTime < 0) phBTime = 0;
+                int phCTime = Phase.iMinSwitchTime - (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.C).LastRelaySwitchTime).TotalSeconds;
+                if (phCTime < 0) phCTime = 0;
+
+                Console.WriteLine(DateTime.Now.ToShortTimeString() + " Moc: " + (pwr).ToString().Replace(".", ",") + " A(" + phATime + "): " + vola.ToString().Replace(".", ",") + " B(" + phBTime + "): " + volb.ToString().Replace(".", ",") + " C(" + phCTime + "): " + volc.ToString().Replace(".", ",") + EnabledPhases);
+
+                Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + EnabledPhases);
             }
-
-            string EnabledPhases = "; PowerState: " + PowerInfo.Power.ToString() + "; Włączone fazy: ";
-
-            foreach (Phase p in Phase.Phases) if (p.State == Phase.PhaseState.On) EnabledPhases += p.Symbol.ToString() + " ";
-            int phATime = (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.A).LastRelaySwitchTime).TotalSeconds;
-            int phBTime = (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.B).LastRelaySwitchTime).TotalSeconds;
-            int phCTime = (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.C).LastRelaySwitchTime).TotalSeconds;
-            Console.WriteLine(DateTime.Now.ToShortTimeString() + " Moc: " + (pwr).ToString().Replace(".", ",") + " A(" + phATime + "): " + vola.ToString().Replace(".", ",") + " B(" + phBTime +"): " + volb.ToString().Replace(".", ",") + " C(" + phCTime+ "): " + volc.ToString().Replace(".", ",") + EnabledPhases);
-
-            Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + EnabledPhases);
+            catch { }
         }
         private static void Modbus_ConnectedChanged(object sender)
         {

@@ -10,6 +10,7 @@ namespace Grzalka_net_framework
 {
     internal class Phase
     {
+        public static int iMinSwitchTime = 30;
         public static GpioController ctrl;
         static List<Phase> phases = new List<Phase>();
         public static Phase[] Phases => phases.ToArray();
@@ -109,21 +110,57 @@ namespace Grzalka_net_framework
 
         void Refresh()
         {
-            if (PowerInfo.Power == PowerInfo.PowerState.ForceOff)
+            try
             {
-                state = PhaseState.Off;
-                UpdateRelay();
-                return;
-            }
-            if (LastRelaySwitchTime.AddSeconds(30) < DateTime.Now)
-            {
+                if (PowerInfo.Power == PowerInfo.PowerState.ForceOff)
+                {
+                    state = PhaseState.Off;
+                    UpdateRelay();
+                    return;
+                }
 
-                if (AverageVoltage >= PowerInfo.MinimalVoltage && PowerInfo.Power == PowerInfo.PowerState.Ok) { state = PhaseState.On; } else { state = PhaseState.Off; }
+                PhaseState newState = state;
+                if (LastRelaySwitchTime.AddSeconds(iMinSwitchTime) < DateTime.Now)
+                {
+                 
+                    if (AverageVoltage >= PowerInfo.MinimalVoltage && PowerInfo.Power == PowerInfo.PowerState.Ok)
+                    { newState = PhaseState.On; }
+                    else
+                    {
+                        if (AverageVoltage <= PowerInfo.MinimalVoltage-3  && state == PhaseState.On)
+                        {
+                            newState = PhaseState.Off;
+                        }
+                    }                   
+
+                }
+                if (newState != state)
+                {
+                    state = newState;
+                    LastRelaySwitchTime = DateTime.Now;
+                    //  UpdateRelay();             
+
+                }
+            }
+            catch { }
+            finally
+            {
                 UpdateRelay();
             }
         }
 
-
+        PinValue getPinState()
+        {
+            try
+            {
+                if (!ctrl.IsPinOpen(GPIO)) { ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output); }
+                return ctrl.Read(GPIO);
+            }
+            catch
+            {
+                return PinValue.Low;
+            }
+        }
 
         void UpdateRelay()
         {
@@ -142,7 +179,7 @@ namespace Grzalka_net_framework
             }
             finally
             {
-                LastRelaySwitchTime = DateTime.Now;
+             //   LastRelaySwitchTime = DateTime.Now;
             }
         }
     }
