@@ -9,8 +9,8 @@ namespace Grzalka
 {
     public static class PowerInfo
     {
-        static readonly double MinimalVoltage = 250.0;
-        static readonly double MinimalPower = 1.5;
+        public static double MinimalVoltage = 250.0;
+        public static double MinimalPower = 1.5;
 
         static double powerVal;
         static public double PowerValue
@@ -40,7 +40,8 @@ namespace Grzalka
         {
             Low = 0,
             Ok = 1,
-            ForceOff = 2
+            ForceOff = 2,
+            Waiting = 3
         }
     }
     public class Program
@@ -143,38 +144,53 @@ namespace Grzalka
         static string serialPort;
         static void Main(string[] args)
         {
-
-            /*  if (args.Length < 2)
-              {
-                  
-                  Environment.Exit(0);
-              }*/
-            string ports = "";
-
-            foreach (string port in System.IO.Ports.SerialPort.GetPortNames())
+            try
             {
-                ports += port + ", ";
-            }
-            Console.WriteLine("Dostępne porty szeregowe:" + Environment.NewLine + ports);
 
-            string configPath = rootPath + "/config.txt";
+                /*  if (args.Length < 2)
+                  {
 
-            Console.WriteLine("Plik konfiguracyjny: " + configPath);
-            if (!System.IO.File.Exists(configPath))
-            {
-                Console.WriteLine("Brak pliku konfiguracyjnego.");
-                Console.ReadLine();
-                Environment.Exit(0);
+                      Environment.Exit(0);
+                  }*/
+                string ports = "";
+
+                foreach (string port in System.IO.Ports.SerialPort.GetPortNames())
+                {
+                    ports += port + ", ";
+                }
+                Console.WriteLine("Dostępne porty szeregowe:" + Environment.NewLine + ports);
+
+                string configPath = System.IO.Path.GetDirectoryName( rootPath) + "/config.txt";
+
+                Console.WriteLine("Plik konfiguracyjny: " + configPath);
+                if (!System.IO.File.Exists(configPath))
+                {
+                    Console.WriteLine("Brak pliku konfiguracyjnego.");
+                    Console.ReadLine();
+                    Environment.Exit(0);
+                }
+                else
+                {
+                    string[] lines = System.IO.File.ReadAllLines(configPath);
+                    serialPort = lines[0];
+                    if (lines.Length >= 2) { PowerInfo.MinimalPower = double.Parse(lines[1]); }
+                    if (lines.Length >= 3) { PowerInfo.MinimalVoltage = double.Parse(lines[2]); }
+                    if (lines.Length >= 4) { Phase.PhasePins[0] = int.Parse(lines[3]); }
+                    if (lines.Length >= 5) { Phase.PhasePins[1] = int.Parse(lines[4]); }
+                    if (lines.Length >= 6) { Phase.PhasePins[2] = int.Parse(lines[5]); }
+
+                }
+                StartupArgs = args;
+                Phase.ctrl = new GpioController(PinNumberingScheme.Logical);
+                Console.WriteLine("Aktualny plik z danymi: " + DataLogFileName());
+                Console.WriteLine("Minimalna moc: " + PowerInfo.MinimalPower + "; Minimalne napięcie: " + PowerInfo.MinimalVoltage);
+                Console.WriteLine("Piny do faz: A:" + Phase.PhasePins[0] + " B: " + Phase.PhasePins[1] + " C: " + Phase.PhasePins[2]);
+                Setup();
             }
-            else
+            catch (Exception ex)
             {
-                string[] lines = System.IO.File.ReadAllLines(configPath);
-                serialPort = lines[0];
+                Console.WriteLine(ex.ToString());
             }
-            StartupArgs = args;
-            Phase.ctrl = new GpioController(PinNumberingScheme.Logical);
-            Console.WriteLine("Aktualny plik z danymi: " + DataLogFileName());
-            Setup();
         }
 
         static void Setup()
@@ -182,6 +198,12 @@ namespace Grzalka
             Started = false;
             try
             {
+                if (Phase.GetPhase(Phase.PhasesSymbols.A) == null) new Phase(Phase.PhasesSymbols.A, Phase.PhasePins[0]);
+                if (Phase.GetPhase(Phase.PhasesSymbols.B) == null) new Phase(Phase.PhasesSymbols.B, Phase.PhasePins[1]);
+                if (Phase.GetPhase(Phase.PhasesSymbols.C) == null) new Phase(Phase.PhasesSymbols.C, Phase.PhasePins[2]);
+
+                PowerInfo.Power = PowerInfo.PowerState.Waiting;
+
                 if (modbus == null)
                 {
                     modbus = new ModbusClient(serialPort);
@@ -201,7 +223,7 @@ namespace Grzalka
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.ToString());
 
                 System.Threading.Thread.Sleep(interval * 5);
                 Setup();
@@ -221,6 +243,7 @@ namespace Grzalka
         static void Run()
         {
             if (Started) return;
+
             Started = true;
             try
             {
@@ -229,10 +252,10 @@ namespace Grzalka
                 {
 
                     int[] reg = modbus.ReadHoldingRegisters(12, 10);
-                    int pwr = reg[0];
-                    int VolA = reg[3];
-                    int VolB = reg[5];
-                    int VolC = reg[7];
+                    double pwr = reg[0] / 100.0;
+                    double VolA = reg[3] / 10.0;
+                    double VolB = reg[5] / 10.0;
+                    double VolC = reg[7] / 10.0;
 
 
                     PowerInfo.PowerValue = pwr;
@@ -251,9 +274,9 @@ namespace Grzalka
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.ToString());
 
-
+                PowerInfo.Power = PowerInfo.PowerState.ForceOff;
                 if (DateTime.Now.Hour >= 16 | DateTime.Now.Hour <= 7)
                 {
                     System.Threading.Thread.Sleep(TimeSpan.FromMinutes(15));
@@ -272,8 +295,7 @@ namespace Grzalka
         static string DataLogFileName()
         {
             if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
-            return rootPath + "/" + dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
-
+            return System.IO.Path.GetDirectoryName(rootPath) + "/" + dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
         }
         static void LogData(double pwr, double vola, double volb, double volc)
         {
@@ -287,11 +309,14 @@ namespace Grzalka
                 Console.WriteLine("Log filename: " + FileName);
                 Log(FileName, "Data" + divider + "Moc" + divider + "Napięcie A" + divider + "Napięcie B" + divider + "Napiecie C" + divider + "Grzałka na fazie");
             }
-            string EnabledPhases = "";
+
+            string EnabledPhases = "; PowerState: " + PowerInfo.Power.ToString() + "; Włączone fazy: ";
 
             foreach (Phase p in Phase.Phases) if (p.State == Phase.PhaseState.On) EnabledPhases += p.Symbol.ToString() + " ";
-
-            Console.WriteLine(DateTime.Now.ToString() + " Moc: " + (pwr / 10.0).ToString().Replace(".", ",") + " A: " + vola.ToString().Replace(".", ",") + " B: " + volb.ToString().Replace(".", ",") + " C: " + volc.ToString().Replace(".", ",") + " Włączone fazy: " + EnabledPhases);
+            int phATime = (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.A).LastRelaySwitchTime).TotalSeconds;
+            int phBTime = (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.B).LastRelaySwitchTime).TotalSeconds;
+            int phCTime = (int)(DateTime.Now - Phase.GetPhase(Phase.PhasesSymbols.C).LastRelaySwitchTime).TotalSeconds;
+            Console.WriteLine(DateTime.Now.ToShortTimeString() + " Moc: " + (pwr).ToString().Replace(".", ",") + " A(" + phATime + "): " + vola.ToString().Replace(".", ",") + " B(" + phBTime +"): " + volb.ToString().Replace(".", ",") + " C(" + phCTime+ "): " + volc.ToString().Replace(".", ",") + EnabledPhases);
 
             Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + EnabledPhases);
         }

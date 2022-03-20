@@ -20,6 +20,8 @@ namespace Grzalka_net_framework
             C = 3
         }
         public readonly PhasesSymbols Symbol;
+
+        public static int[] PhasePins = { 26, 19, 13 };
         public enum PhaseState
         {
             Off = 0,
@@ -43,9 +45,30 @@ namespace Grzalka_net_framework
             set
             {
                 voltage = value;
-
+                while (VoltageHistory.Count > 10)
+                {
+                    VoltageHistory.RemoveAt(VoltageHistory.Count - 1);
+                }
+                VoltageHistory.Insert(0, voltage);
+                Refresh();
             }
         }
+
+        List<double> VoltageHistory = new List<double>();
+        public double AverageVoltage
+        {
+            get
+            {
+                double sum = 0;
+                int count = VoltageHistory.Count;
+                foreach (double vol in VoltageHistory)
+                {
+                    sum += vol;
+                }
+                return sum / count;
+            }
+        }
+
         public readonly int GPIO;
         static public Phase GetPhase(PhasesSymbols symbol)
         {
@@ -59,6 +82,8 @@ namespace Grzalka_net_framework
         {
             phases.Clear();
         }
+
+        public DateTime LastRelaySwitchTime = DateTime.MinValue;
 
         public Phase(PhasesSymbols _symbol, int _gpioPin)
         {
@@ -81,22 +106,44 @@ namespace Grzalka_net_framework
                 phase.Refresh();
             }
         }
-        
+
         void Refresh()
         {
+            if (PowerInfo.Power == PowerInfo.PowerState.ForceOff)
+            {
+                state = PhaseState.Off;
+                UpdateRelay();
+                return;
+            }
+            if (LastRelaySwitchTime.AddSeconds(30) < DateTime.Now)
+            {
 
+                if (AverageVoltage >= PowerInfo.MinimalVoltage && PowerInfo.Power == PowerInfo.PowerState.Ok) { state = PhaseState.On; } else { state = PhaseState.Off; }
+                UpdateRelay();
+            }
         }
 
 
 
         void UpdateRelay()
         {
-            if (!ctrl.IsPinOpen(GPIO)) { ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output); }
+            try
+            {
+                if (!ctrl.IsPinOpen(GPIO)) { ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output); }
 
-            if (state != PhaseState.On)
-                ctrl.Write(GPIO, PinValue.High);
-            else
-                ctrl.Write(GPIO, PinValue.Low);
+                if (state != PhaseState.On)
+                    ctrl.Write(GPIO, PinValue.High);
+                else
+                    ctrl.Write(GPIO, PinValue.Low);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                LastRelaySwitchTime = DateTime.Now;
+            }
         }
     }
 }
