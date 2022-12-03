@@ -10,6 +10,8 @@ namespace Grzalka_net_framework
 {
     internal class Phase
     {
+        public static readonly int SwitchedOffMaxTime = 5*60;
+
         public static int iMinSwitchTime = 30;
         public static GpioController ctrl;
         static List<Phase> phases = new List<Phase>();
@@ -38,7 +40,7 @@ namespace Grzalka_net_framework
                 UpdateRelay();
             }
         }
-
+        int ElapsedSwitchedOffTime = 0;
         double voltage;
         public double Voltage
         {
@@ -46,11 +48,15 @@ namespace Grzalka_net_framework
             set
             {
                 voltage = value;
-                while (VoltageHistory.Count > 10)
+                try
                 {
-                    VoltageHistory.RemoveAt(VoltageHistory.Count - 1);
+                    while (VoltageHistory.Count > 10)
+                    {
+                        VoltageHistory.RemoveAt(VoltageHistory.Count - 1);
+                    }
+                    VoltageHistory.Insert(0, voltage);
                 }
-                VoltageHistory.Insert(0, voltage);
+                catch (Exception ex) { Program.ELog(ex); }
                 Refresh();
             }
         }
@@ -60,22 +66,39 @@ namespace Grzalka_net_framework
         {
             get
             {
-                double sum = 0;
-                int count = VoltageHistory.Count;
-                foreach (double vol in VoltageHistory)
+                double val = 0;
+                try
                 {
-                    sum += vol;
+                    double sum = 0;
+                    int count = VoltageHistory.Count;
+                    foreach (double vol in VoltageHistory)
+                    {
+                        sum += vol;
+                    }
+                    val = sum / count;
                 }
-                return sum / count;
+                catch (Exception ex)
+                {
+                    Program.ELog(ex);
+                }
+
+                return val;
             }
         }
 
         public readonly int GPIO;
         static public Phase GetPhase(PhasesSymbols symbol)
         {
-            foreach (Phase phase in phases)
+            try
             {
-                if (phase.Symbol == symbol) return phase;
+                foreach (Phase phase in phases)
+                {
+                    if (phase.Symbol == symbol) return phase;
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.ELog(ex);
             }
             return null;
         }
@@ -88,23 +111,35 @@ namespace Grzalka_net_framework
 
         public Phase(PhasesSymbols _symbol, int _gpioPin)
         {
-            state = PhaseState.Off;
-            Symbol = _symbol;
-            GPIO = _gpioPin;
-            phases.Add(this);
-
-            if (!ctrl.IsPinOpen(GPIO))
+            try
             {
-                ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output);
-                ctrl.Write(GPIO, PinValue.High);
+                if (GetPhase(_symbol) != null) return;
+                state = PhaseState.Off;
+                Symbol = _symbol;
+                GPIO = _gpioPin;
+                phases.Add(this);
+
+                if (!ctrl.IsPinOpen(GPIO))
+                {
+                    ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output);
+                    ctrl.Write(GPIO, PinValue.High);
+                }
             }
+            catch (Exception ex) { Program.ELog(ex); }
         }
 
         public static void RefreshPhases()
         {
-            foreach (Phase phase in phases)
+            try
             {
-                phase.Refresh();
+                foreach (Phase phase in phases)
+                {
+                    phase.Refresh();
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.ELog(ex);
             }
         }
 
@@ -122,16 +157,29 @@ namespace Grzalka_net_framework
                 PhaseState newState = state;
                 if (LastRelaySwitchTime.AddSeconds(iMinSwitchTime) < DateTime.Now)
                 {
-                 
-                    if (AverageVoltage >= PowerInfo.MinimalVoltage && PowerInfo.Power == PowerInfo.PowerState.Ok)
-                    { newState = PhaseState.On; }
+
+                   
+                    if (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown) ElapsedSwitchedOffTime = (int)(DateTime.Now - PowerInfo.LastTurnOffTime).TotalMinutes;
+       
+
+                    if (AverageVoltage >= PowerInfo.MinimalVoltage && (PowerInfo.Power == PowerInfo.PowerState.Ok || (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown && HoldAfterShutdown)))
+                    {
+                        if (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown)
+                        {
+                           
+                        }
+                        else ElapsedSwitchedOffTime = 0;
+
+                        newState = PhaseState.On;
+                    }
                     else
                     {
-                        if (AverageVoltage <= PowerInfo.MinimalVoltage-3  && state == PhaseState.On)
+                        //  ElapsedSwitchedOffTime = (int)(DateTime.Now - PowerInfo.LastTurnOffTime).TotalMinutes;
+                        if (AverageVoltage <= PowerInfo.MinimalVoltage - 3 && state == PhaseState.On)
                         {
                             newState = PhaseState.Off;
                         }
-                    }                   
+                    }
 
                 }
                 if (newState != state)
@@ -142,7 +190,10 @@ namespace Grzalka_net_framework
 
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Program.ELog(ex);
+            }
             finally
             {
                 UpdateRelay();
@@ -169,17 +220,23 @@ namespace Grzalka_net_framework
                 if (!ctrl.IsPinOpen(GPIO)) { ctrl.OpenPin(GPIO); ctrl.SetPinMode(GPIO, PinMode.Output); }
 
                 if (state != PhaseState.On)
+                {
+                    if (getPinState() == PinValue.Low) Console.WriteLine("Faza " + Symbol.ToString() + " -> OFF");
                     ctrl.Write(GPIO, PinValue.High);
+                }
                 else
+                {
+                    if (getPinState() == PinValue.High) Console.WriteLine("Faza " + Symbol.ToString() + " -> ON");
                     ctrl.Write(GPIO, PinValue.Low);
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Program.ELog(ex);
             }
             finally
             {
-             //   LastRelaySwitchTime = DateTime.Now;
+                //   LastRelaySwitchTime = DateTime.Now;
             }
         }
     }

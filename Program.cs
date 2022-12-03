@@ -12,6 +12,9 @@ namespace Grzalka
         public static double MinimalVoltage = 250.0;
         public static double MinimalPower = 1.5;
         public static DateTime LastTurnOffTime = DateTime.MinValue;
+        public static double MinimalGridAmp = 2;
+        public static double CurrentGridAmp = 0;
+
         static double powerVal;
         static public double PowerValue
         {
@@ -21,7 +24,19 @@ namespace Grzalka
                 powerVal = value;
                 if (power != PowerState.ForceOff)
                 {
-                    if (powerVal >= MinimalPower) { power = PowerState.Ok; } else power = PowerState.Low;
+                    if (powerVal >= MinimalPower) { power = PowerState.Ok; }
+                    else
+                    {
+                        if (powerVal == 0 && CurrentGridAmp >= MinimalGridAmp)
+                        {
+                            if (power != PowerState.OverVoltageShutDown)
+                            {
+                                power = PowerState.OverVoltageShutDown;
+                                LastTurnOffTime = DateTime.Now;
+                            }
+                        }
+                        else power = PowerState.Low;
+                    }
                 }
             }
         }
@@ -32,8 +47,10 @@ namespace Grzalka
             get => power;
             set
             {
-                power = value;
-                Phase.RefreshPhases();
+            
+                    power = value;
+       
+                
             }
         }
         public enum PowerState
@@ -41,7 +58,8 @@ namespace Grzalka
             Low = 0,
             Ok = 1,
             ForceOff = 2,
-            Waiting = 3
+            Waiting = 3,
+            OverVoltageShutDown = 4
         }
     }
     public class Program
@@ -190,7 +208,7 @@ namespace Grzalka
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                ELog(ex);
             }
         }
 
@@ -198,7 +216,9 @@ namespace Grzalka
         {
             try
             {
+
                 PowerInfo.Power = PowerInfo.PowerState.ForceOff;
+                ELog(new Exception("ZAMKNIĘCIE PROGRAMU"));
             }
             catch
             {
@@ -211,6 +231,7 @@ namespace Grzalka
             Started = false;
             try
             {
+                Console.WriteLine("Konfigurowanie... ");
                 if (Phase.GetPhase(Phase.PhasesSymbols.A) == null) new Phase(Phase.PhasesSymbols.A, Phase.PhasePins[0]);
                 if (Phase.GetPhase(Phase.PhasesSymbols.B) == null) new Phase(Phase.PhasesSymbols.B, Phase.PhasePins[1]);
                 if (Phase.GetPhase(Phase.PhasesSymbols.C) == null) new Phase(Phase.PhasesSymbols.C, Phase.PhasePins[2]);
@@ -232,11 +253,12 @@ namespace Grzalka
                 {
                     modbus.Disconnect();
                 }
+                Console.WriteLine("Koniec konfiguracji");
                 modbus.Connect();
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                ELog(ex);
 
                 System.Threading.Thread.Sleep(interval * 5);
                 Setup();
@@ -283,6 +305,7 @@ namespace Grzalka
                     Phase.GetPhase(Phase.PhasesSymbols.B).Voltage = VolB;
                     Phase.GetPhase(Phase.PhasesSymbols.C).Voltage = VolC;
 
+                    Phase.RefreshPhases();
 
                     // System.Threading.Thread.Sleep(1000);
                     // continue;
@@ -294,29 +317,38 @@ namespace Grzalka
             }
             catch (Exception ex)
             {
-                if (ex.GetType() == typeof(System.TimeoutException))
+                ELog(ex);
+                try
                 {
-                    Console.WriteLine("------------------------------[STOP]---------------------------------");
-                    Console.WriteLine("Brak połączenia z falownikiem.");
-                    Console.WriteLine("---------------------------------------------------------------------");
+                    if (ex.GetType() == typeof(System.TimeoutException))
+                    {
+                        Console.WriteLine("------------------------------[STOP]---------------------------------");
+                        Console.WriteLine("Brak połączenia z falownikiem.");
+                        Console.WriteLine("---------------------------------------------------------------------");
+                    }
+                    else
+                    {
+                        Console.WriteLine("------------------------------[STOP]---------------------------------");
+                        Console.WriteLine("Error: ");
+                        Console.WriteLine(ex.GetType().ToString());
+                        Console.WriteLine("---------------------------------------------------------------------");
+                    }
+                    PowerInfo.Power = PowerInfo.PowerState.ForceOff;
+                    LogData(pwr, VolA, VolB, VolC);
+                    if (DateTime.Now.Hour >= 17 | DateTime.Now.Hour <= 7)
+                    {
+                        System.Threading.Thread.Sleep(TimeSpan.FromMinutes(15));
+                    }
+                    else
+                    {
+                        System.Threading.Thread.Sleep(interval * 5);
+                    }
                 }
-                else
+                catch (Exception ex2)
                 {
-                    Console.WriteLine("------------------------------[STOP]---------------------------------");
-                    Console.WriteLine("Error: ");
-                    Console.WriteLine(ex.GetType().ToString());
-                    Console.WriteLine("---------------------------------------------------------------------");
+                    ELog(ex2);
+                    PowerInfo.Power = PowerInfo.PowerState.ForceOff;
                 }
-                PowerInfo.Power = PowerInfo.PowerState.ForceOff;
-                if (DateTime.Now.Hour >= 16 | DateTime.Now.Hour <= 7)
-                {
-                    System.Threading.Thread.Sleep(TimeSpan.FromMinutes(15));
-                }
-                else
-                {
-                    System.Threading.Thread.Sleep(interval * 5);
-                }
-                LogData(pwr, VolA, VolB, VolC);
                 Setup();
 
             }
@@ -360,7 +392,10 @@ namespace Grzalka
 
                 Log(FileName, DateTime.Now.ToString() + divider + pwr.ToString().Replace(".", ",") + divider + vola.ToString().Replace(".", ",") + divider + volb.ToString().Replace(".", ",") + divider + volc.ToString().Replace(".", ",") + divider + EnabledPhases);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                ELog(ex);
+            }
         }
         private static void Modbus_ConnectedChanged(object sender)
         {
@@ -368,10 +403,19 @@ namespace Grzalka
         }
 
 
+
         public static void Log(string fileName, string Text)
         {
             try
             {
+                if (File.Exists(fileName))
+                {
+                    if (new FileInfo(fileName).Length > 209715200)
+                    {
+                        File.Delete(fileName);
+                        Log(fileName, "Plik przekroczył 200 mb");
+                    }
+                }
                 using (StreamWriter sw = File.AppendText(fileName))
                 {
                     sw.WriteLine(Text);
@@ -379,5 +423,15 @@ namespace Grzalka
             }
             catch { }
         }
+        public static void ELog(Exception exception)
+        {
+            try
+            {
+                Log(rootPath + "/ErrorLog.txt", exception.ToString());
+                Console.WriteLine(exception.ToString());
+            }
+            catch { }
+        }
     }
 }
+
