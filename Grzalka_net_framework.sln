@@ -5,12 +5,6 @@ VisualStudioVersion = 17.1.32203.90
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Grzalka_net_framework", "Grzalka_net_framework.csproj", "{67C6536F-C796-478C-A314-2FD9E4DD93DF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasyModbus_Net40", "..\..\..\..\..\EasyModbusTCP.NET-master\EasyModbus\EasyModbus_Net40.csproj", "{7657FC4A-AEDF-4F17-B3E9-0D0DFB1CE23B}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "grzalka_forms", "..\grzalka_forms\grzalka_forms.csproj", "{A916AC51-D54A-4829-9C17-4DA97556D256}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "watchdog", "..\watchdog\watchdog.csproj", "{51189330-FB0F-4930-80FF-CC03D7B18536}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,23 +18,6 @@ Global
 		{67C6536F-C796-478C-A314-2FD9E4DD93DF}.DebugCommercial|Any CPU.Build.0 = Debug|Any CPU
 		{67C6536F-C796-478C-A314-2FD9E4DD93DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{67C6536F-C796-478C-A314-2FD9E4DD93DF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7657FC4A-AEDF-4F17-B3E9-0D0DFB1CE23B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7657FC4A-AEDF-4F17-B3E9-0D0DFB1CE23B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7657FC4A-AEDF-4F17-B3E9-0D0DFB1CE23B}.DebugCommercial|Any CPU.ActiveCfg = DebugCommercial|Any CPU
-		{7657FC4A-AEDF-4F17-B3E9-0D0DFB1CE23B}.DebugCommercial|Any CPU.Build.0 = DebugCommercial|Any CPU
-		{7657FC4A-AEDF-4F17-B3E9-0D0DFB1CE23B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7657FC4A-AEDF-4F17-B3E9-0D0DFB1CE23B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A916AC51-D54A-4829-9C17-4DA97556D256}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A916AC51-D54A-4829-9C17-4DA97556D256}.DebugCommercial|Any CPU.ActiveCfg = Debug|Any CPU
-		{A916AC51-D54A-4829-9C17-4DA97556D256}.DebugCommercial|Any CPU.Build.0 = Debug|Any CPU
-		{A916AC51-D54A-4829-9C17-4DA97556D256}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A916AC51-D54A-4829-9C17-4DA97556D256}.Release|Any CPU.Build.0 = Release|Any CPU
-		{51189330-FB0F-4930-80FF-CC03D7B18536}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{51189330-FB0F-4930-80FF-CC03D7B18536}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{51189330-FB0F-4930-80FF-CC03D7B18536}.DebugCommercial|Any CPU.ActiveCfg = Debug|Any CPU
-		{51189330-FB0F-4930-80FF-CC03D7B18536}.DebugCommercial|Any CPU.Build.0 = Debug|Any CPU
-		{51189330-FB0F-4930-80FF-CC03D7B18536}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{51189330-FB0F-4930-80FF-CC03D7B18536}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
