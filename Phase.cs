@@ -164,11 +164,12 @@ namespace Grzalka_net_framework
 
                     if (AverageVoltage >= PowerInfo.MinimalVoltage && (PowerInfo.Power == PowerInfo.PowerState.Ok || (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown && HoldAfterShutdown)))
                     {
-                        if (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown)
+                       /* if (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown)
                         {
                            
                         }
-                        else ElapsedSwitchedOffTime = 0;
+                        else*/
+                        ElapsedSwitchedOffTime = 0;
 
                         newState = PhaseState.On;
                     }

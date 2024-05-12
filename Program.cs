@@ -241,9 +241,9 @@ namespace Grzalka
                 if (modbus == null)
                 {
                     modbus = new ModbusClient(serialPort);
-                    modbus.ReceiveDataChanged += Modbus_ReceiveDataChanged;
+                   // modbus.ReceiveDataChanged += Modbus_ReceiveDataChanged;
                     modbus.ConnectedChanged += Modbus_ConnectedChanged;
-                    modbus.DataReceivingEnd += Modbus_DataReceivingEnd;
+                   // modbus.DataReceivingEnd += Modbus_DataReceivingEnd;
                     modbus.Parity = System.IO.Ports.Parity.None;
                     modbus.StopBits = System.IO.Ports.StopBits.One;
                     modbus.UnitIdentifier = 1;
@@ -265,15 +265,15 @@ namespace Grzalka
             }
         }
 
-        private static void Modbus_DataReceivingEnd(object sender)
+      /*  private static void Modbus_DataReceivingEnd(object sender)
         {
             Console.WriteLine("Zakończono odbieranie danych");
-        }
+        }*/
 
-        private static void Modbus_ReceiveDataChanged(object sender)
+      /* private static void Modbus_ReceiveDataChanged(object sender)
         {
 
-        }
+        }*/
 
         static void Run()
         {
