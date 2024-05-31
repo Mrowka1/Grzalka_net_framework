@@ -47,10 +47,10 @@ namespace Grzalka
             get => power;
             set
             {
-            
-                    power = value;
-       
-                
+
+                power = value;
+
+
             }
         }
         public enum PowerState
@@ -241,9 +241,9 @@ namespace Grzalka
                 if (modbus == null)
                 {
                     modbus = new ModbusClient(serialPort);
-                   // modbus.ReceiveDataChanged += Modbus_ReceiveDataChanged;
+                    // modbus.ReceiveDataChanged += Modbus_ReceiveDataChanged;
                     modbus.ConnectedChanged += Modbus_ConnectedChanged;
-                   // modbus.DataReceivingEnd += Modbus_DataReceivingEnd;
+                    // modbus.DataReceivingEnd += Modbus_DataReceivingEnd;
                     modbus.Parity = System.IO.Ports.Parity.None;
                     modbus.StopBits = System.IO.Ports.StopBits.One;
                     modbus.UnitIdentifier = 1;
@@ -265,15 +265,15 @@ namespace Grzalka
             }
         }
 
-      /*  private static void Modbus_DataReceivingEnd(object sender)
-        {
-            Console.WriteLine("Zakończono odbieranie danych");
-        }*/
+        /*  private static void Modbus_DataReceivingEnd(object sender)
+          {
+              Console.WriteLine("Zakończono odbieranie danych");
+          }*/
 
-      /* private static void Modbus_ReceiveDataChanged(object sender)
-        {
+        /* private static void Modbus_ReceiveDataChanged(object sender)
+          {
 
-        }*/
+          }*/
 
         static void Run()
         {
@@ -360,7 +360,11 @@ namespace Grzalka
         static string DataLogFileName()
         {
             if (dLogFileDate.Day != DateTime.Now.Day) dLogFileDate = DateTime.Now;
-            return System.IO.Path.GetDirectoryName(rootPath) + "/" + dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
+            string pathToLogs = System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(rootPath)) + @"/logs";
+
+            if (!System.IO.Directory.Exists(pathToLogs)) System.IO.Directory.CreateDirectory(pathToLogs);
+
+            return pathToLogs + "/" + dLogFileDate.ToString("dd.MM.yyyy").Replace(".", "_").Replace(" ", "_").Replace(":", "_") + ".csv";
         }
         static void LogData(double pwr, double vola, double volb, double volc)
         {
@@ -377,7 +381,7 @@ namespace Grzalka
                     Log(FileName, "Data" + divider + "Moc" + divider + "Napięcie A" + divider + "Napięcie B" + divider + "Napiecie C" + divider + "Grzałka na fazie");
                 }
 
-                string EnabledPhases = "; PowerState: " + PowerInfo.Power.ToString() + "; Włączone fazy: ";
+                string EnabledPhases = "; PowerState: " + PowerInfo.Power.ToString() + ";";
 
                 foreach (Phase p in Phase.Phases) if (p.State == Phase.PhaseState.On) EnabledPhases += p.Symbol.ToString() + " ";
 

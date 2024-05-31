@@ -162,7 +162,7 @@ namespace Grzalka_net_framework
                     if (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown) ElapsedSwitchedOffTime = (int)(DateTime.Now - PowerInfo.LastTurnOffTime).TotalMinutes;
        
 
-                    if (AverageVoltage >= PowerInfo.MinimalVoltage && (PowerInfo.Power == PowerInfo.PowerState.Ok || (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown && HoldAfterShutdown)))
+                    if (AverageVoltage >= PowerInfo.MinimalVoltage && (PowerInfo.Power == PowerInfo.PowerState.Ok || (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown)))
                     {
                        /* if (PowerInfo.Power == PowerInfo.PowerState.OverVoltageShutDown)
                         {
